@@ -17,13 +17,13 @@ query = db.users
 
 
 @app.route("/")
-def hello_world():
+def hello_world() -> tuple:
     return "Success", 200, {"Access-Control-Allow-Origin": "*"}
 
 
 # Endpoint for checking user and return true or false to login handling
 @app.route("/api/login", methods=["POST"])
-def login_user():
+def login_user() -> tuple:
     input = json.loads(request.data)
     test = input["username"]
     test2 = input["password"]
@@ -39,7 +39,7 @@ def login_user():
 
 # Endpoint for reading all users. Works?.
 @app.route("/api/users", methods=["GET"])
-def get_all_users():
+def get_all_users() -> tuple:
     data = []
     users = query.find({}, {"password": 0, "email": 0, "name": 0, "_id": 0})
     for user in users:
@@ -48,7 +48,7 @@ def get_all_users():
 
 
 @app.route("/api/product", methods=["POST"])
-def post_products():
+def post_products() -> tuple:
     data = json.loads(request.data)
     data["id"] = int(increment_post())
     query.insert_one(data)
@@ -57,7 +57,7 @@ def post_products():
 
 # Endpoint for user creation. Works.
 @app.route("/api/user", methods=["POST"])
-def create_user():
+def create_user() -> tuple:
     try:
         data_list = json.loads(request.data)
         if not data_list["username"] or not data_list["name"]:
@@ -80,7 +80,7 @@ def create_user():
 
 # Endpoint for updating user information. Works.
 @app.route("/api/user/<int:user_id>", methods=["PUT"])
-def update_user(user_id):
+def update_user(user_id: int) -> tuple:
     try:
         # Get the JSON data from the request
         data = request.get_json()
@@ -128,7 +128,7 @@ def update_user(user_id):
 
 # Endpoint for reading a user. Works.
 @app.route("/api/user/<user_id>", methods=["GET"])
-def get_single_user(user_id):
+def get_single_user(user_id: int) -> tuple:
     data = []
     todos = query.find(
         {"id": int(user_id)}, {"password": 0, "email": 0, "name": 0, "_id": 0}
@@ -140,7 +140,7 @@ def get_single_user(user_id):
 
 # Endpoint for user deletion. Works.
 @app.route("/api/user/<user_id>", methods=["DELETE"])
-def delete_single_user(user_id):
+def delete_single_user(user_id: int) -> tuple:
     try:
         # Ensure user_id is an integer
         user_id = int(user_id)
@@ -174,7 +174,7 @@ def delete_single_user(user_id):
         )  # 500 indicates an internal server error
 
 
-def increment_post():
+def increment_post() -> str:
     id_fetch = query.find_one(sort=[("id", pymongo.DESCENDING)])
     return str(id_fetch["id"] + 1)
 
