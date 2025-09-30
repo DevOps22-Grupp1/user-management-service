@@ -1,3 +1,90 @@
+# name: Docker Build and Push
+
+# on:
+#   push:
+#     branches: ["*"]
+#   pull_request:
+#     branches:
+#       - main
+
+# permissions:
+#   issues: write
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+
+#     steps:
+
+#       - name: Checkout code
+#         uses: actions/checkout@v2
+
+#       - name: Checkout code
+#         uses: actions/checkout@v2
+
+#       - name: Docker Login
+#         env:
+#           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+#           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+#         run: |
+#           echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+
+#       - name: Build Docker Image to Test repositories
+#         run: |
+#           docker build -t passwordnotsafe/test-cypress:user-management-service ./backend
+
+#       - name: Push Docker Image to Test repositories
+#         run: |
+#           docker push passwordnotsafe/test-cypress:user-management-service
+
+#       # - name: Wait for completion
+#       #   run: |
+#       #      $(curl -s -X POST \
+#       #         --url 'https://api.github.com/repos/DevOps22-Grupp1/test/actions/workflows/run.test.yml/dispatches' \
+#       #         -H "Accept: application/vnd.github.v3+json" \
+#       #         -H "Authorization: Bearer ${{secrets.TOKEN}}" \
+#       #         -d '{"ref":"main"}')
+
+#       #       STATUS="in_progress"
+#       #       while [ "$STATUS" != "success" ]; do
+#       #         sleep 10
+#       #         RESPONSE=$(curl https://api.github.com/repos/DevOps22-Grupp1/test/actions/runs)
+#       #         STATUS=$(echo $RESPONSE | jq -r '.workflow_runs[0].conclusion')
+#       #         if [ "$STATUS" = "failure" ]; then
+#       #         exit 1
+#       #       fi
+#       #       done
+
+#       # - name: Docker Login
+#       #   env:
+#       #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+#       #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+#       #   run: |
+#       #     echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+
+#       # - name: Build Docker Image
+#       #   run: |
+#       #     docker build -t passwordnotsafe/user-management-service ./backend
+#       #     docker build -t passwordnotsafe/user-management-service:${{ github.sha }} ./backend
+
+#       # - name: Push Docker Image
+#       #   run: |
+#       #     docker push passwordnotsafe/user-management-service
+#       #     docker push passwordnotsafe/user-management-service:${{ github.sha }}
+
+#       # - name: Sleep for 30 seconds
+#       #   uses: jakejarvis/wait-action@master
+#       #   with:
+#       #     time: '15s'
+
+#       # - name: Trigger fetch new sha update to k8 deployment file.
+#       #   run: |
+#       #     curl --request POST \
+#       #       --url 'https://api.github.com/repos/DevOps22-Grupp1/scamazon/actions/workflows/user-update-sha.yml/dispatches' \
+#       #       -H "Accept: application/vnd.github+json" \
+#       #       -H 'Authorization: Bearer ${{secrets.TOKEN}}' \
+#       #       -d '{"ref":"main"}'
+
 name: Docker Build and Push
 
 on:
@@ -7,26 +94,17 @@ on:
     branches:
       - main
 
-
 permissions:
   issues: write
-
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    
     steps:
-      
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4 # Använder senaste versionen
 
-
-      - name: Checkout code
-        uses: actions/checkout@v2
-      
-      
       - name: Docker Login
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -34,59 +112,28 @@ jobs:
         run: |
           echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
 
-      - name: Build Docker Image to Test repositories
+      # --- Test-hanteringen är nu utkommenterad/inaktiverad ---
+      # - name: Build Docker Image to Test repositories
+      #   run: |
+      #     docker build -t passwordnotsafe/test-cypress:user-management-service ./backend
+
+      # - name: Push Docker Image to Test repositories
+      #   run: |
+      #     docker push passwordnotsafe/test-cypress:user-management-service
+      # ----------------------------------------------------
+
+      # --- Huvud-servicen är nu aktiverad ---
+      - name: Build Docker Image (user-management-service)
         run: |
-          docker build -t passwordnotsafe/test-cypress:user-management-service ./backend
+          # Bygger och taggar med 'latest'
+          docker build -t passwordnotsafe/user-management-service:latest ./backend
+          # Bygger och taggar med den unika commit SHA
+          docker build -t passwordnotsafe/user-management-service:${{ github.sha }} ./backend
 
-      - name: Push Docker Image to Test repositories
+      - name: Push Docker Image (user-management-service)
         run: |
-          docker push passwordnotsafe/test-cypress:user-management-service
-      
-      # - name: Wait for completion
-      #   run: |
-      #      $(curl -s -X POST \
-      #         --url 'https://api.github.com/repos/DevOps22-Grupp1/test/actions/workflows/run.test.yml/dispatches' \
-      #         -H "Accept: application/vnd.github.v3+json" \
-      #         -H "Authorization: Bearer ${{secrets.TOKEN}}" \
-      #         -d '{"ref":"main"}') 
-          
-      #       STATUS="in_progress"
-      #       while [ "$STATUS" != "success" ]; do
-      #         sleep 10
-      #         RESPONSE=$(curl https://api.github.com/repos/DevOps22-Grupp1/test/actions/runs)
-      #         STATUS=$(echo $RESPONSE | jq -r '.workflow_runs[0].conclusion')
-      #         if [ "$STATUS" = "failure" ]; then
-      #         exit 1
-      #       fi
-      #       done
-
-      # - name: Docker Login
-      #   env:
-      #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      #   run: |
-      #     echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-
-      # - name: Build Docker Image
-      #   run: |
-      #     docker build -t passwordnotsafe/user-management-service ./backend
-      #     docker build -t passwordnotsafe/user-management-service:${{ github.sha }} ./backend
-
-      # - name: Push Docker Image
-      #   run: |
-      #     docker push passwordnotsafe/user-management-service
-      #     docker push passwordnotsafe/user-management-service:${{ github.sha }}
-      
-
-      # - name: Sleep for 30 seconds
-      #   uses: jakejarvis/wait-action@master
-      #   with:
-      #     time: '15s' 
-
-      # - name: Trigger fetch new sha update to k8 deployment file.
-      #   run: |
-      #     curl --request POST \
-      #       --url 'https://api.github.com/repos/DevOps22-Grupp1/scamazon/actions/workflows/user-update-sha.yml/dispatches' \
-      #       -H "Accept: application/vnd.github+json" \
-      #       -H 'Authorization: Bearer ${{secrets.TOKEN}}' \
-      #       -d '{"ref":"main"}'
+          # Pushar 'latest' taggen
+          docker push passwordnotsafe/user-management-service:latest
+          # Pushar SHA taggen
+          docker push passwordnotsafe/user-management-service:${{ github.sha }}
+      # ------------------------------------
