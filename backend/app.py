@@ -14,8 +14,8 @@ metrics = PrometheusMetrics(app)
 MONGO_URI = f"mongodb://{db_username}:{db_password}@{host}:{db_port}/?authSource=admin"
 client = MongoClient(MONGO_URI)
 
-db = client.allProducts
-query = db.products
+db = client.allUsers
+query = db.users
 
 
 @app.route("/")
