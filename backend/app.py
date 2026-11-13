@@ -1,5 +1,6 @@
-from flask import Flask, jsonify, request, json
+from flask import Flask, jsonify, request
 from prometheus_flask_exporter import PrometheusMetrics
+from werkzeug.security import check_password_hash, generate_password_hash
 import pymongo
 import os
 from pymongo import MongoClient
@@ -19,26 +20,51 @@ client = MongoClient(MONGO_URI)
 db = client.allUsers
 query = db.users
 
+# Every account made here is a customer. Admin is not a stored role: the home page grants it
+# through the magic-link login, so no admin password exists anywhere.
+CUSTOMER = "customer"
+# The fields a sign-up may set; anything else in the request is ignored
+SIGNUP_FIELDS = ("username", "name", "password", "email", "avatar")
+HASH_PREFIXES = ("scrypt:", "pbkdf2:")
+
+
+def migrate_users() -> None:
+    """Idempotent, on every start: plaintext passwords become hashes, every role customer."""
+    for user in query.find({"password": {"$type": "string"}}, {"password": 1}):
+        if not user["password"].startswith(HASH_PREFIXES):
+            query.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"password": generate_password_hash(user["password"])}},
+            )
+    query.update_many({"role": {"$ne": CUSTOMER}}, {"$set": {"role": CUSTOMER}})
+
 
 @app.route("/")
 def hello_world() -> tuple:
     return "Success", 200, {"Access-Control-Allow-Origin": "*"}
 
 
-# Endpoint for checking user and return true or false to login handling
+# Checks a username and password; answers [user] on a match, [] otherwise
 @app.route("/api/login", methods=["POST"])
 def login_user() -> tuple:
-    input = json.loads(request.data)
-    test = input["username"]
-    test2 = input["password"]
-    data = []
-    users = query.find(
-        {"username": test, "password": test2},
-        {"id": 1, "username": 1, "avatar": 1, "role": 1, "_id": 0},
+    data = request.get_json(silent=True) or {}
+    username = data.get("username")
+    password = data.get("password")
+    # Strings only: a JSON object here ({"$ne": null}) would otherwise be a Mongo query
+    if not isinstance(username, str) or not isinstance(password, str):
+        return jsonify([]), 200
+    user = query.find_one(
+        {"username": username},
+        {"id": 1, "username": 1, "avatar": 1, "role": 1, "password": 1, "_id": 0},
     )
-    for user in users:
-        data.append(user)
-    return data, 200, {"Access-Control-Allow-Origin": "*"}
+    stored = user.get("password") if user else None
+    # An account without a password (the public demo accounts) cannot log in
+    if not isinstance(stored, str) or not stored.startswith(HASH_PREFIXES):
+        return jsonify([]), 200
+    if not check_password_hash(stored, password):
+        return jsonify([]), 200
+    del user["password"]
+    return jsonify([user]), 200
 
 
 # Endpoint for reading all users. Works?.
@@ -51,28 +77,26 @@ def get_all_users() -> tuple:
     return jsonify(data)
 
 
-@app.route("/api/product", methods=["POST"])
-def post_products() -> tuple:
-    data = json.loads(request.data)
-    data["id"] = int(increment_post())
-    query.insert_one(data)
-    return "a new post has been added", 201, {"Access-Control-Allow-Origin": "*"}
-
-
-# Endpoint for user creation. Works.
+# Endpoint for user creation (sign-up)
 @app.route("/api/user", methods=["POST"])
 def create_user() -> tuple:
     try:
-        data_list = json.loads(request.data)
-        if not data_list["username"] or not data_list["name"]:
+        data = request.get_json(silent=True) or {}
+        user = {field: data.get(field) for field in SIGNUP_FIELDS}
+        if not all(isinstance(value, str) for value in user.values()):
+            return jsonify({"message": "All fields must be text"}), 400
+        if not user["username"] or not user["name"]:
             return jsonify({"message": "Username and/or name are required"}), 400
-        if not data_list["password"] or not data_list["email"]:
+        if not user["password"] or not user["email"]:
             return jsonify({"message": "Password and/or email are required"}), 400
-        if query.find_one({"password": data_list["password"]}):
-            return jsonify({"message": "Password already exists"}), 400
-        data_list["id"] = int(increment_post())
+        if query.find_one({"username": user["username"]}):
+            return jsonify({"message": "Username already exists"}), 400
+        user["password"] = generate_password_hash(user["password"])
+        user["role"] = CUSTOMER
+        user["bought"] = []
+        user["id"] = int(increment_post())
         # Insert the new user document into the 'users' collection
-        query.insert_one(data_list)
+        query.insert_one(user)
         return (
             jsonify({"message": "User created successfully"}),
             201,
@@ -180,8 +204,9 @@ def delete_single_user(user_id: int) -> tuple:
 
 def increment_post() -> str:
     id_fetch = query.find_one(sort=[("id", pymongo.DESCENDING)])
-    return str(id_fetch["id"] + 1)
+    return str(id_fetch["id"] + 1 if id_fetch else 1)
 
 
 if __name__ == "__main__":
+    migrate_users()
     app.run(host="0.0.0.0", port=server_port, debug=False)
