@@ -207,6 +207,30 @@ def increment_post() -> str:
     return str(id_fetch["id"] + 1 if id_fetch else 1)
 
 
+def ensure_demo_account() -> None:
+    """A public customer account for visitors who only want to look (DEMO_USERNAME and
+    DEMO_PASSWORD; both unset means none). On every start it gets that password back, so
+    nobody can take the name over by signing up with it first."""
+    username = os.environ.get("DEMO_USERNAME")
+    password = os.environ.get("DEMO_PASSWORD")
+    if not username or not password:
+        return
+    fields = {"password": generate_password_hash(password), "role": CUSTOMER}
+    if query.find_one({"username": username}):
+        query.update_one({"username": username}, {"$set": fields})
+    else:
+        query.insert_one({
+            "id": int(increment_post()),
+            "username": username,
+            "name": "Demo customer",
+            "email": "",
+            "avatar": os.environ.get("DEMO_AVATAR", ""),
+            "bought": [],
+            **fields,
+        })
+
+
 if __name__ == "__main__":
     migrate_users()
+    ensure_demo_account()
     app.run(host="0.0.0.0", port=server_port, debug=False)
