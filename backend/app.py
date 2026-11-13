@@ -25,7 +25,14 @@ query = db.users
 CUSTOMER = "customer"
 # The fields a sign-up may set; anything else in the request is ignored
 SIGNUP_FIELDS = ("username", "name", "password", "email", "avatar")
+# The fields the account page may change (PUT /api/user/<id>)
+PROFILE_FIELDS = ("name", "email", "avatar")
 HASH_PREFIXES = ("scrypt:", "pbkdf2:")
+
+
+def is_demo(user: dict) -> bool:
+    """The shared demo account: everyone uses it, so nobody may lock the others out of it."""
+    return bool(os.environ.get("DEMO_USERNAME")) and user.get("username") == os.environ.get("DEMO_USERNAME")
 
 
 def migrate_users() -> None:
@@ -120,9 +127,10 @@ def update_user(user_id: int) -> tuple:
                 400,
             )  # 400 indicates a bad request
 
-        # Get the updated name and email fields from the JSON data
-        updated_name = data.get("name")
-        updated_email = data.get("email")
+        # Only these fields, and only as text; the password and role have their own rules
+        updates = {
+            field: data[field] for field in PROFILE_FIELDS if isinstance(data.get(field), str)
+        }
 
         # Check if the user with the provided user_id exists
         user = query.find_one({"id": user_id})
@@ -133,14 +141,8 @@ def update_user(user_id: int) -> tuple:
                 404,
             )  # 404 indicates resource not found
 
-        # Update the user's name and email if provided in the JSON data
-        if updated_name is not None:
-            user["name"] = updated_name
-        if updated_email is not None:
-            user["email"] = updated_email
-
-        # Update the user document in the MongoDB collection
-        query.update_one({"id": user_id}, {"$set": user})
+        if updates:
+            query.update_one({"id": user_id}, {"$set": updates})
 
         return (
             jsonify({"message": "User updated successfully"}),
@@ -166,6 +168,36 @@ def get_single_user(user_id: int) -> tuple:
     return jsonify(data)
 
 
+# The account page: what a customer may see and change about themselves
+@app.route("/api/user/<int:user_id>/profile", methods=["GET"])
+def get_profile(user_id: int) -> tuple:
+    user = query.find_one(
+        {"id": user_id}, {"username": 1, "name": 1, "email": 1, "avatar": 1, "_id": 0}
+    )
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    return jsonify(user)
+
+
+# Changes the password; the current one must be right. The shared demo account keeps its own.
+@app.route("/api/user/<int:user_id>/password", methods=["POST"])
+def change_password(user_id: int) -> tuple:
+    data = request.get_json(silent=True) or {}
+    current, new = data.get("current"), data.get("new")
+    if not isinstance(current, str) or not isinstance(new, str) or not new:
+        return jsonify({"message": "Current and new password are required"}), 400
+    user = query.find_one({"id": user_id})
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    if is_demo(user):
+        return jsonify({"message": "The demo account's password cannot be changed"}), 403
+    stored = user.get("password")
+    if not isinstance(stored, str) or not stored.startswith(HASH_PREFIXES) or not check_password_hash(stored, current):
+        return jsonify({"message": "Wrong password"}), 403
+    query.update_one({"id": user_id}, {"$set": {"password": generate_password_hash(new)}})
+    return jsonify({"message": "Password changed"}), 200
+
+
 # Endpoint for user deletion. Works.
 @app.route("/api/user/<user_id>", methods=["DELETE"])
 def delete_single_user(user_id: int) -> tuple:
@@ -180,6 +212,8 @@ def delete_single_user(user_id: int) -> tuple:
                 jsonify({"message": "User not found"}),
                 404,
             )  # 404 indicates resource not found
+        if is_demo(user):
+            return jsonify({"message": "The demo account cannot be deleted"}), 403
 
         # Delete the user document with the provided user_id
         query.delete_one({"id": user_id})
