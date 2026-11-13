@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from prometheus_flask_exporter import PrometheusMetrics
 from werkzeug.security import check_password_hash, generate_password_hash
+import datetime
 import pymongo
 import os
 from pymongo import MongoClient
@@ -44,6 +45,13 @@ def migrate_users() -> None:
                 {"$set": {"password": generate_password_hash(user["password"])}},
             )
     query.update_many({"role": {"$ne": CUSTOMER}}, {"$set": {"role": CUSTOMER}})
+    # When the account was made: the janitor in the deploy deletes customer accounts after a
+    # while. Accounts from before this field get today, so they get the whole time too.
+    query.update_many({"created": {"$exists": False}}, {"$set": {"created": now()}})
+
+
+def now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 @app.route("/")
@@ -101,6 +109,7 @@ def create_user() -> tuple:
         user["password"] = generate_password_hash(user["password"])
         user["role"] = CUSTOMER
         user["bought"] = []
+        user["created"] = now()
         user["id"] = int(increment_post())
         # Insert the new user document into the 'users' collection
         query.insert_one(user)
@@ -260,6 +269,7 @@ def ensure_demo_account() -> None:
             "email": "",
             "avatar": os.environ.get("DEMO_AVATAR", ""),
             "bought": [],
+            "created": now(),
             **fields,
         })
 
