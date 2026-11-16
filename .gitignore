@@ -6,10 +6,13 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-
+data
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
+mongo-data
+playground-1.mongodb.js
+API-test.py
+copcode.py
 # Runtime data
 pids
 *.pid
@@ -128,3 +131,4 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+__pycache__/

@@ -8,26 +8,22 @@ networks:
 volumes:
   mongo-data:
 
-
 services:
   user-management-service:
     build: ./backend
     networks:
       - my_network
     ports:
-      - "5005:5002"
+      - "4006:4006"
     depends_on:
       mongo-user-management-service:
         condition: service_healthy
-
-  prometheus-user-management-service:
-    image: prom/prometheus:latest
-    ports:
-      - "9099:9090"
-    networks:
-      - my_network
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yaml
+    environment:
+      - SERVER_PORT=4006
+      - DB_USERNAME=root
+      - DB_PASSWORD=example
+      - DB_HOST=mongo-user-management-service
+      - DB_PORT=27017
 
   mongo-user-management-service:
     image: mongo
@@ -38,21 +34,21 @@ services:
       - ./mongo-data:/data/db
       - ./init/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     healthcheck:
-      test: echo 'mongo.runCommand("ping").ok' | mongosh mongo-user-management-service:27017 --quiet
+      test: echo 'mongo-user-management-service.runCommand("ping").ok' | mongosh mongo-user-management-service:27017 --quiet
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 40s
+      retries: 20
+      start_period: 200s
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
-      MONGO_INITDB_DATABASE: testdb
+      MONGO_INITDB_DATABASE: allUsers
 
   mongo-express-user-management-service:
     image: mongo-express
     restart: always
     ports:
-      - 8087:8081
+      - 8082:8081
     networks:
       - my_network
     depends_on:
@@ -62,3 +58,17 @@ services:
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
       ME_CONFIG_MONGODB_ADMINPASSWORD: example
       ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo-user-management-service:27017/
+
+  # minio:
+  #   image: quay.io/minio/minio:RELEASE.2022-02-18T01-50-10Z
+  #   volumes:
+  #     - ./data:/data
+  #   ports:
+  #     - 9000:9000
+  #     - 9001:9001
+  #   environment:
+  #     MINIO_ROOT_USER: "minio"
+  #     MINIO_ROOT_PASSWORD: "minio123"
+  #     MINIO_ADDRESS: ":9000"
+  #     MINIO_CONSOLE_ADDRESS: ":9001"
+  #   command: minio server /data
